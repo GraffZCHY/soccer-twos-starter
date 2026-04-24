@@ -1,8 +1,10 @@
+import importlib
+import importlib.util
+from pathlib import Path
 from random import uniform as randfloat
 
 import gym
 from ray.rllib import MultiAgentEnv
-import soccer_twos
 
 
 class RLLibWrapper(gym.core.Wrapper, MultiAgentEnv):
@@ -11,6 +13,26 @@ class RLLibWrapper(gym.core.Wrapper, MultiAgentEnv):
     """
 
     pass
+
+
+def load_soccer_twos():
+    """
+    Import soccer_twos defensively.
+
+    On PACE, soccer_twos may try to download its Unity binaries on first import
+    and then unconditionally remove a temporary directory. Pre-creating that
+    directory avoids the package crashing during its own setup routine.
+    """
+    spec = importlib.util.find_spec("soccer_twos")
+    if spec and spec.submodule_search_locations:
+        package_dir = Path(next(iter(spec.submodule_search_locations)))
+        (package_dir / "temp").mkdir(exist_ok=True)
+    return importlib.import_module("soccer_twos")
+
+
+def get_multiagent_player_variation():
+    soccer_twos = load_soccer_twos()
+    return soccer_twos.EnvType.multiagent_player
 
 
 def create_rllib_env(env_config: dict = {}):
@@ -27,6 +49,7 @@ def create_rllib_env(env_config: dict = {}):
             env_config.worker_index * env_config.get("num_envs_per_worker", 1)
             + env_config.vector_index
         )
+    soccer_twos = load_soccer_twos()
     env = soccer_twos.make(**env_config)
     # env = TransitionRecorderWrapper(env)
     if "multiagent" in env_config and not env_config["multiagent"]:
